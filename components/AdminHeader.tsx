@@ -54,7 +54,7 @@ export default function AdminHeader({
           }}
           className="cursor-pointer hover:underline leading-tight max-w-72"
         >
-          {displayTitle ?? "Add a title"}
+          {displayTitle || "Add a title"}
         </h1>
       ) : (
         <UploadSiteInfoForm
@@ -89,7 +89,7 @@ export default function AdminHeader({
             onClick={onOpenSettings}
             className="hover:text-neutral-300 hover:underline underline-offset-2 text-lg xl:text-xl"
           >
-            {user.user_metadata?.full_name || user.email}
+            {user.user_metadata?.full_name || "create username"}
           </button>
 
           <button

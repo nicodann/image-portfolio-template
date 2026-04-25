@@ -34,6 +34,7 @@ export default function AdminUI({
 
   function handleApiResponse(res: Response) {
     if (res.status === 401) {
+      console.error("[handleApiResponse] 401 — logging out");
       setAutoLoggedOut(true);
       window.netlifyIdentity.logout();
       return false;
@@ -116,6 +117,7 @@ export default function AdminUI({
 
   useEffect(() => {
     let tokenInterval: ReturnType<typeof setInterval>;
+    let isRefreshing = false;
 
     async function checkToken() {
       const u = window.netlifyIdentity.currentUser() as NetlifyUser | null;
@@ -134,29 +136,45 @@ export default function AdminUI({
       //   msLeft <= fiveMinutes,
       // );
 
+      const msLeft = expiresAt - Date.now();
+      // console.log("[checkToken] msLeft:", msLeft, "| will refresh:", msLeft <= fiveMinutes);
+
       if (Date.now() >= expiresAt - fiveMinutes) {
+        if (isRefreshing) return;
+        isRefreshing = true;
+        // console.log("[checkToken] attempting refresh");
         try {
-          // console.log("[checkToken] refreshing token...");
-          const refreshed = (await window.netlifyIdentity.refresh(
-            true,
-          )) as NetlifyUser;
+          await window.netlifyIdentity.refresh(true);
+          const refreshed = window.netlifyIdentity.currentUser() as NetlifyUser;
           const newExpiry = refreshed?.token?.expires_at ?? 0;
-          // console.log("[checkToken] refresh result expires_at:", newExpiry);
-          if (newExpiry * 1000 <= Date.now()) {
+          // console.log("[checkToken] after refresh, newExpiry:", newExpiry, "| now:", Date.now(), "| expired:", newExpiry <= Date.now());
+          if (newExpiry <= Date.now()) {
             throw new Error("Token still expired after refresh");
           }
           setUser(refreshed);
         } catch (err) {
-          console.error("[checkToken] refresh failed, logging out:", err);
-          setAutoLoggedOut(true);
-          window.netlifyIdentity.logout();
+          if (Date.now() >= expiresAt) {
+            console.error(
+              "[checkToken] refresh failed and token expired, logging out:",
+              err,
+            );
+            setAutoLoggedOut(true);
+            window.netlifyIdentity.logout();
+          } else {
+            console.warn(
+              "[checkToken] refresh failed but token still valid, will retry:",
+              err,
+            );
+          }
+        } finally {
+          isRefreshing = false;
         }
       }
     }
 
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") {
-        console.log("tab became visible, checking token");
+        // console.log("tab became visible, checking token");
         checkToken();
       }
     };
@@ -181,7 +199,7 @@ export default function AdminUI({
       });
 
       ni.on("logout", () => {
-        console.log("[netlifyIdentity] logout event");
+        // console.log("[netlifyIdentity] logout event");
         setUser(null);
       });
 
